@@ -7,6 +7,7 @@ import {
   where,
   orderBy,
   getDocs,
+  getDoc, // <-- added (used in sendChat)
   deleteDoc,
   doc,
   updateDoc,
@@ -22,6 +23,52 @@ const ADMIN_UID = "HFhMEeJg7GdNCl4atA2YJTlAKsF2";
 const ADMIN_ALIAS = "Admin";
 const ADMIN_EMAIL = "no-reply@yourapp.com";
 
+/* ---------- utils ---------- */
+function normalizePlan(u) {
+  // Try a few common places folks store plan/tier
+  const raw =
+    u.subscriptionTier ??
+    u.plan ??
+    u.subscriptionPlan ??
+    u.subscription?.plan ??
+    u.subscriptionEntitlementId ??
+    "";
+
+  const s = String(raw).toLowerCase().replace(/\s+/g, "_").replace("-", "_");
+  if (s.includes("premium_plus") || s.includes("premiumplus"))
+    return "premium_plus";
+  if (s.includes("premium")) return "premium";
+  if (s.includes("pro")) return "pro";
+  // Treat anything else as free
+  return "free";
+}
+
+function PlanBadge({ plan }) {
+  const styles =
+    {
+      premium_plus: "bg-purple-600 text-white",
+      premium: "bg-yellow-500 text-black",
+      pro: "bg-blue-600 text-white",
+      free: "bg-gray-300 text-gray-800",
+    }[plan] || "bg-gray-300 text-gray-800";
+
+  const label =
+    {
+      premium_plus: "Premium+",
+      premium: "Premium",
+      pro: "Pro",
+      free: "Free",
+    }[plan] || plan;
+
+  return (
+    <span
+      className={`inline-block text-[11px] px-2 py-0.5 rounded-full ${styles}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 async function deleteQueryBatch(q, batchSize = 200) {
   const snap = await getDocs(q);
   if (snap.empty) return;
@@ -36,6 +83,9 @@ export default function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [busyUid, setBusyUid] = useState(null);
   const [search, setSearch] = useState("");
+
+  // NEW: plan filter
+  const [planFilter, setPlanFilter] = useState("all"); // all | premium_plus | premium | pro | free
 
   // chat panel
   const [chatUserId, setChatUserId] = useState(null);
@@ -56,7 +106,11 @@ export default function UserManagement() {
   /* ───────── load users ───────── */
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "users"), (snap) => {
-      setUsers(snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
+      const list = snap.docs.map((d) => {
+        const data = { uid: d.id, ...d.data() };
+        return { ...data, __plan: normalizePlan(data) }; // attach normalized plan
+      });
+      setUsers(list);
       setLoading(false);
     });
     return unsub;
@@ -69,12 +123,12 @@ export default function UserManagement() {
       setActiveChatId(null);
       return;
     }
-    const q = query(
+    const qRooms = query(
       collection(db, "chat_rooms"),
       where("userIds", "array-contains", chatUserId),
       orderBy("lastMessageTime", "desc"),
     );
-    const unsub = onSnapshot(q, (snap) => {
+    const unsub = onSnapshot(qRooms, (snap) => {
       const threads = snap.docs.map((d) => {
         const data = d.data();
         const other = data.userIds.find((id) => id !== chatUserId);
@@ -137,7 +191,7 @@ export default function UserManagement() {
       query(collection(db, "products"), where("sellerId", "==", uid)),
     );
     // favorites
-    await deleteDoc(doc(db, "favorites", uid)).catch(() => {});
+    await deleteDoc(doc(db, "favorites", uid)).catch(() => { });
     // chat rooms
     const rooms = await getDocs(
       query(
@@ -196,29 +250,70 @@ export default function UserManagement() {
     alert("Message sent.");
   };
 
-  /* ───────── search filter ───────── */
+  /* ───────── counts & filters ───────── */
+  const counts = users.reduce(
+    (acc, u) => {
+      acc.all++;
+      acc[u.__plan] = (acc[u.__plan] || 0) + 1;
+      return acc;
+    },
+    { all: 0, premium_plus: 0, premium: 0, pro: 0, free: 0 },
+  );
+
   const term = search.trim().toLowerCase();
-  const filtered = term
+
+  // search first
+  let filtered = term
     ? users.filter(
-        (u) =>
-          u.uid.toLowerCase().includes(term) ||
-          u.email?.toLowerCase().includes(term) ||
-          u.displayName?.toLowerCase().includes(term),
-      )
+      (u) =>
+        u.uid.toLowerCase().includes(term) ||
+        u.email?.toLowerCase().includes(term) ||
+        u.displayName?.toLowerCase().includes(term) ||
+        normalizePlan(u).includes(term), // allow searching by plan text
+    )
     : users;
+
+  // then plan filter
+  if (planFilter !== "all") {
+    filtered = filtered.filter((u) => u.__plan === planFilter);
+  }
 
   if (loading) return <p className="p-6">Loading users…</p>;
 
   return (
     <div className="p-8 relative">
-      <h1 className="text-2xl font-semibold mb-6">User Management</h1>
+      <h1 className="text-2xl font-semibold mb-4">User Management</h1>
 
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search by UID, name, or email..."
-        className="border rounded px-3 py-2 mb-4 w-full max-w-sm"
-      />
+      {/* Top controls: search + plan filter chips */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by UID, name, email, or plan…"
+          className="border rounded px-3 py-2 w-full sm:max-w-sm"
+        />
+
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: "all", label: `All (${counts.all})` },
+            { key: "premium_plus", label: `Premium+ (${counts.premium_plus})` },
+            { key: "premium", label: `Premium (${counts.premium})` },
+            { key: "pro", label: `Pro (${counts.pro})` },
+            { key: "free", label: `Free (${counts.free})` },
+          ].map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setPlanFilter(opt.key)}
+              className={`px-3 py-1 rounded-full text-xs border ${planFilter === opt.key
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "bg-white text-gray-700 hover:bg-gray-50"
+                }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="overflow-x-auto">
         <table className="min-w-full border-collapse text-left">
@@ -227,9 +322,10 @@ export default function UserManagement() {
               <th className="border px-3 py-2">UID</th>
               <th className="border px-3 py-2">Name</th>
               <th className="border px-3 py-2">Email</th>
+              {/* NEW: Plan column */}
+              <th className="border px-3 py-2">Plan</th>
               <th className="border px-3 py-2">Warnings</th>
               <th className="border px-3 py-2">Data</th>
-
               <th className="border px-3 py-2">Actions</th>
             </tr>
           </thead>
@@ -241,6 +337,12 @@ export default function UserManagement() {
                   {u.displayName || "—"}
                 </td>
                 <td className="border px-3 py-2 text-xs">{u.email}</td>
+
+                {/* NEW: Plan badge */}
+                <td className="border px-3 py-2">
+                  <PlanBadge plan={u.__plan} />
+                </td>
+
                 <td className="border px-3 py-2 text-center">
                   {u.warnings ?? 0}
                   <button
@@ -250,12 +352,13 @@ export default function UserManagement() {
                     +1
                   </button>
                 </td>
-                {/* NEW data cell */}
+
                 <td className="border px-3 py-2 text-xs max-w-sm">
                   <pre className="whitespace-pre-wrap break-words">
                     {JSON.stringify(u, null, 2)}
                   </pre>
                 </td>
+
                 <td className="border px-3 py-2 space-y-1">
                   <button
                     onClick={() => openNotifModal(u.uid)}
@@ -307,9 +410,8 @@ export default function UserManagement() {
                 <button
                   key={t.id}
                   onClick={() => setActiveChatId(t.id)}
-                  className={`w-full text-left px-4 py-2 hover:bg-gray-100 ${
-                    activeChatId === t.id ? "bg-gray-200" : ""
-                  }`}
+                  className={`w-full text-left px-4 py-2 hover:bg-gray-100 ${activeChatId === t.id ? "bg-gray-200" : ""
+                    }`}
                 >
                   <p className="font-medium">{t.otherUserId}</p>
                   <p className="text-xs text-gray-500 truncate">
