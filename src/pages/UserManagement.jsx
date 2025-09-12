@@ -228,6 +228,8 @@ export default function UserManagement() {
               <th className="border px-3 py-2">Name</th>
               <th className="border px-3 py-2">Email</th>
               <th className="border px-3 py-2">Warnings</th>
+              <th className="border px-3 py-2">Data</th>
+
               <th className="border px-3 py-2">Actions</th>
             </tr>
           </thead>
@@ -247,6 +249,12 @@ export default function UserManagement() {
                   >
                     +1
                   </button>
+                </td>
+                {/* NEW data cell */}
+                <td className="border px-3 py-2 text-xs max-w-sm">
+                  <pre className="whitespace-pre-wrap break-words">
+                    {JSON.stringify(u, null, 2)}
+                  </pre>
                 </td>
                 <td className="border px-3 py-2 space-y-1">
                   <button
