@@ -173,6 +173,16 @@ export default function UserManagement() {
         unreadCount: { [ADMIN_UID]: 1, [toUserId]: 1 },
       });
     }
+    // 4) ALSO: send a push notification via Cloud Function
+    await sendNotificationToUser({
+      userId: toUserId,
+      type: "message", // your CF can branch on this
+      title: "New message from Admin", // shown in push
+      body: text, // preview text
+      // optional extra payload your CF can forward in 'data'
+      roomId,
+      senderId: ADMIN_UID,
+    });
   };
 
   /* ───────── delete user & related ───────── */
@@ -191,7 +201,7 @@ export default function UserManagement() {
       query(collection(db, "products"), where("sellerId", "==", uid)),
     );
     // favorites
-    await deleteDoc(doc(db, "favorites", uid)).catch(() => { });
+    await deleteDoc(doc(db, "favorites", uid)).catch(() => {});
     // chat rooms
     const rooms = await getDocs(
       query(
@@ -266,12 +276,12 @@ export default function UserManagement() {
   // search first
   let filtered = term
     ? users.filter(
-      (u) =>
-        u.uid.toLowerCase().includes(term) ||
-        u.email?.toLowerCase().includes(term) ||
-        u.displayName?.toLowerCase().includes(term) ||
-        normalizePlan(u).includes(term), // allow searching by plan text
-    )
+        (u) =>
+          u.uid.toLowerCase().includes(term) ||
+          u.email?.toLowerCase().includes(term) ||
+          u.displayName?.toLowerCase().includes(term) ||
+          normalizePlan(u).includes(term), // allow searching by plan text
+      )
     : users;
 
   // then plan filter
@@ -305,10 +315,11 @@ export default function UserManagement() {
             <button
               key={opt.key}
               onClick={() => setPlanFilter(opt.key)}
-              className={`px-3 py-1 rounded-full text-xs border ${planFilter === opt.key
+              className={`px-3 py-1 rounded-full text-xs border ${
+                planFilter === opt.key
                   ? "bg-gray-900 text-white border-gray-900"
                   : "bg-white text-gray-700 hover:bg-gray-50"
-                }`}
+              }`}
             >
               {opt.label}
             </button>
@@ -411,8 +422,9 @@ export default function UserManagement() {
                 <button
                   key={t.id}
                   onClick={() => setActiveChatId(t.id)}
-                  className={`w-full text-left px-4 py-2 hover:bg-gray-100 ${activeChatId === t.id ? "bg-gray-200" : ""
-                    }`}
+                  className={`w-full text-left px-4 py-2 hover:bg-gray-100 ${
+                    activeChatId === t.id ? "bg-gray-200" : ""
+                  }`}
                 >
                   <p className="font-medium">{t.otherUserId}</p>
                   <p className="text-xs text-gray-500 truncate">
