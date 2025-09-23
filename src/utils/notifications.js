@@ -4,17 +4,14 @@ const API_KEY = import.meta.env.VITE_RAILWAY_API_KEY;
 /** Internal helper */
 async function postJson(path, payload) {
   console.log(payload);
-  const res = await fetch(
-    `https://bbdevs-server-production.up.railway.app/${path}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": API_KEY,
-      },
-      body: JSON.stringify({ ...payload, appId: "thrifta" }),
+  const res = await fetch(`${SERVER_URL}/${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": API_KEY,
     },
-  );
+    body: JSON.stringify({ ...payload, appId: "thrifta" }),
+  });
 
   if (!res.ok) {
     console.error(`Server responded ${res.status}`, await res.text());
