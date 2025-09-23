@@ -61,6 +61,7 @@ export async function sendNotificationToUser({
 
     const endpoint =
         type === "message" ? "/send-message-notification" : "/send-notification";
+    console.log(endpoint);
 
     return postJson(endpoint, payload);
 }

@@ -237,6 +237,7 @@ export default function UserManagement() {
     if (!notifTitle.trim() || !notifBody.trim()) return;
     await sendNotificationToUser({
       userId: notifUserId,
+      type: "generic",
       title: notifTitle.trim(),
       body: notifBody.trim(),
     });
