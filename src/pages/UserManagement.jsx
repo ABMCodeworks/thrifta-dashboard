@@ -7,7 +7,7 @@ import {
   where,
   orderBy,
   getDocs,
-  getDoc, // <-- added (used in sendChat)
+  getDoc,
   deleteDoc,
   doc,
   updateDoc,
@@ -25,7 +25,6 @@ const ADMIN_EMAIL = "no-reply@yourapp.com";
 
 /* ---------- utils ---------- */
 function normalizePlan(u) {
-  // Try a few common places folks store plan/tier
   const raw =
     u.subscriptionTier ??
     u.plan ??
@@ -39,7 +38,6 @@ function normalizePlan(u) {
     return "premium_plus";
   if (s.includes("premium")) return "premium";
   if (s.includes("pro")) return "pro";
-  // Treat anything else as free
   return "free";
 }
 
@@ -84,8 +82,7 @@ export default function UserManagement() {
   const [busyUid, setBusyUid] = useState(null);
   const [search, setSearch] = useState("");
 
-  // NEW: plan filter
-  const [planFilter, setPlanFilter] = useState("all"); // all | premium_plus | premium | pro | free
+  const [planFilter, setPlanFilter] = useState("all");
 
   // chat panel
   const [chatUserId, setChatUserId] = useState(null);
@@ -108,7 +105,7 @@ export default function UserManagement() {
     const unsub = onSnapshot(collection(db, "users"), (snap) => {
       const list = snap.docs.map((d) => {
         const data = { uid: d.id, ...d.data() };
-        return { ...data, __plan: normalizePlan(data) }; // attach normalized plan
+        return { ...data, __plan: normalizePlan(data) };
       });
       setUsers(list);
       setLoading(false);
@@ -116,47 +113,62 @@ export default function UserManagement() {
     return unsub;
   }, []);
 
-  /* ───────── load chat threads ───────── */
+  /* ───────── load chat threads (NEW SYSTEM) ───────── */
   useEffect(() => {
     if (!chatUserId) {
       setChatThreads([]);
       setActiveChatId(null);
       return;
     }
-    const qRooms = query(
-      collection(db, "chat_rooms"),
-      where("userIds", "array-contains", chatUserId),
-      orderBy("lastMessageTime", "desc"),
+
+    // ✅ NEW: users/{uid}/threads as source of truth
+    const qThreads = query(
+      collection(db, "users", chatUserId, "threads"),
+      orderBy("lastMessageAt", "desc"),
     );
-    const unsub = onSnapshot(qRooms, (snap) => {
+
+    const unsub = onSnapshot(qThreads, (snap) => {
       const threads = snap.docs.map((d) => {
         const data = d.data();
-        const other = data.userIds.find((id) => id !== chatUserId);
-        return { id: d.id, otherUserId: other, lastMessage: data.lastMessage };
+
+        // Try common fields used by your app
+        const roomId = data.roomId ?? d.id;
+        const otherUserId =
+          data.otherUserId ?? data.partnerId ?? data.otherUid ?? "—";
+
+        const lastMessage =
+          data.lastMessageText ?? data.lastMessage ?? data.preview ?? "";
+
+        return { id: roomId, otherUserId, lastMessage };
       });
+
       setChatThreads(threads);
       setActiveChatId(threads[0]?.id ?? null);
     });
+
     return unsub;
   }, [chatUserId]);
 
-  /* ───────── send a chat message ───────── */
+  /* ───────── send a chat message (NEW SYSTEM) ───────── */
   const sendChat = async (toUserId, text) => {
     const roomId = [ADMIN_UID, toUserId].sort().join("_");
     const roomRef = doc(db, "chat_rooms", roomId);
 
-    // 1) add message
-    await addDoc(collection(db, "chat_rooms", roomId, "messages"), {
-      senderID: ADMIN_UID,
-      senderName: ADMIN_ALIAS,
-      senderEmail: ADMIN_EMAIL,
-      receiverID: toUserId,
-      message: text,
-      timestamp: serverTimestamp(),
-      read: false,
-    });
+    // 1) add message (keep this so ChatViewer keeps working)
+    const msgRef = await addDoc(
+      collection(db, "chat_rooms", roomId, "messages"),
+      {
+        senderID: ADMIN_UID,
+        senderName: ADMIN_ALIAS,
+        senderEmail: ADMIN_EMAIL,
+        receiverID: toUserId,
+        message: text,
+        timestamp: serverTimestamp(),
+        read: false,
+      },
+    );
 
-    // 2) update or create room meta
+    // 2) OPTIONAL legacy room meta (keeps older logic compatible)
     const snap = await getDoc(roomRef);
     if (snap.exists()) {
       await updateDoc(roomRef, {
@@ -170,16 +182,52 @@ export default function UserManagement() {
         userIds: [ADMIN_UID, toUserId],
         lastMessage: text,
         lastMessageTime: serverTimestamp(),
-        unreadCount: { [ADMIN_UID]: 1, [toUserId]: 1 },
+        unreadCount: { [ADMIN_UID]: 0, [toUserId]: 1 },
       });
     }
-    // 4) ALSO: send a push notification via Cloud Function
+
+    // 3) ✅ NEW: update threads for BOTH users (this is what your Flutter Inbox uses)
+    const now = serverTimestamp();
+    const lastMessageId = msgRef.id;
+
+    // receiver thread doc
+    await setDoc(
+      doc(db, "users", toUserId, "threads", roomId),
+      {
+        roomId,
+        otherUserId: ADMIN_UID,
+        lastMessageId,
+        lastMessageText: text,
+        lastMessageAt: now,
+        lastMessageSenderId: ADMIN_UID,
+        unreadCount: increment(1),
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+
+    // admin thread doc
+    await setDoc(
+      doc(db, "users", ADMIN_UID, "threads", roomId),
+      {
+        roomId,
+        otherUserId: toUserId,
+        lastMessageId,
+        lastMessageText: text,
+        lastMessageAt: now,
+        lastMessageSenderId: ADMIN_UID,
+        unreadCount: 0, // admin sent it
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+
+    // 4) push notification via your server
     await sendNotificationToUser({
       userId: toUserId,
-      type: "message", // your CF can branch on this
-      title: "New message from Admin", // shown in push
-      body: text, // preview text
-      // optional extra payload your CF can forward in 'data'
+      type: "message",
+      title: "New message from Admin",
+      body: text,
       roomId,
       senderId: ADMIN_UID,
     });
@@ -200,9 +248,16 @@ export default function UserManagement() {
     await deleteQueryBatch(
       query(collection(db, "products"), where("sellerId", "==", uid)),
     );
+
     // favorites
     await deleteDoc(doc(db, "favorites", uid)).catch(() => {});
-    // chat rooms
+
+    // ✅ NEW: delete user threads
+    await deleteQueryBatch(collection(db, "users", uid, "threads")).catch(
+      () => {},
+    );
+
+    // chat rooms (legacy)
     const rooms = await getDocs(
       query(
         collection(db, "chat_rooms"),
@@ -213,6 +268,7 @@ export default function UserManagement() {
       await deleteQueryBatch(collection(db, "chat_rooms", r.id, "messages"));
       await deleteDoc(r.ref);
     }
+
     // user doc
     await deleteDoc(doc(db, "users", uid));
 
@@ -273,18 +329,16 @@ export default function UserManagement() {
 
   const term = search.trim().toLowerCase();
 
-  // search first
   let filtered = term
     ? users.filter(
         (u) =>
           u.uid.toLowerCase().includes(term) ||
           u.email?.toLowerCase().includes(term) ||
           u.displayName?.toLowerCase().includes(term) ||
-          normalizePlan(u).includes(term), // allow searching by plan text
+          normalizePlan(u).includes(term),
       )
     : users;
 
-  // then plan filter
   if (planFilter !== "all") {
     filtered = filtered.filter((u) => u.__plan === planFilter);
   }
@@ -295,7 +349,6 @@ export default function UserManagement() {
     <div className="p-8 relative">
       <h1 className="text-2xl font-semibold mb-4">User Management</h1>
 
-      {/* Top controls: search + plan filter chips */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <input
           value={search}
@@ -334,7 +387,6 @@ export default function UserManagement() {
               <th className="border px-3 py-2">UID</th>
               <th className="border px-3 py-2">Name</th>
               <th className="border px-3 py-2">Email</th>
-              {/* NEW: Plan column */}
               <th className="border px-3 py-2">Plan</th>
               <th className="border px-3 py-2">Warnings</th>
               <th className="border px-3 py-2">Data</th>
@@ -350,7 +402,6 @@ export default function UserManagement() {
                 </td>
                 <td className="border px-3 py-2 text-xs">{u.email}</td>
 
-                {/* NEW: Plan badge */}
                 <td className="border px-3 py-2">
                   <PlanBadge plan={u.__plan} />
                 </td>
