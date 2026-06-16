@@ -70,21 +70,21 @@ export default function UserProductSearch() {
 
     // ─────────────────────── UI ───────────────────────
     return (
-        <div className="bg-white p-6 rounded shadow mb-12">
-            <h2 className="text-xl font-semibold mb-4">
+        <div className="card p-6">
+            <h2 className="text-lg font-semibold mb-4 text-slate-900">
                 Search user &amp; view their products
             </h2>
 
             <form onSubmit={handleSearch} className="flex gap-3 mb-6">
                 <input
-                    className="flex-1 border rounded px-3 py-2"
+                    className="flex-1 rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30"
                     placeholder="Enter display name…"
                     value={term}
                     onChange={(e) => setTerm(e.target.value)}
                 />
                 <button
                     type="submit"
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                    className="rounded-lg bg-brand-600 px-4 py-2 font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
                     disabled={loading}
                 >
                     {loading ? 'Searching…' : 'Search'}

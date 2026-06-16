@@ -197,14 +197,12 @@ export default function ProductReports() {
   if (loading) return <p className="p-6">Loading…</p>;
 
   return (
-    <div className="p-8 relative">
+    <div className="relative">
       {toast && (
         <div className="fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded shadow">
           {toast}
         </div>
       )}
-
-      <h1 className="text-2xl font-semibold mb-6">Product Reports</h1>
 
       <div className="overflow-x-auto">
         <table className="min-w-full text-left border-collapse">

@@ -40,47 +40,57 @@ export default function RatingReports() {
     };
 
     return (
-        <div className="p-6 bg-white rounded shadow mt-8">
-            <h2 className="text-xl mb-4">Rating Reports</h2>
-            <table className="w-full text-left border-collapse">
-                <thead>
-                    <tr>
-                        <th className="border p-2">Rating ID</th>
-                        <th className="border p-2">Reporter</th>
-                        <th className="border p-2">Reason</th>
-                        <th className="border p-2">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {reports.map((r) => (
-                        <tr key={r.id}>
-                            <td className="border p-2">{r.ratingId}</td>
-                            <td className="border p-2">{r.reporterUserId}</td>
-                            <td className="border p-2">{r.reason}</td>
-                            <td className="border p-2 space-x-2">
-                                <button
-                                    onClick={() => banUser(r.reporterUserId)}
-                                    className="px-2 py-1 bg-red-500 text-white rounded"
-                                >
-                                    Ban
-                                </button>
-                                <button
-                                    onClick={() => sendWarning(r.reporterUserId, r.reason)}
-                                    className="px-2 py-1 bg-yellow-400 rounded"
-                                >
-                                    Warn
-                                </button>
-                                <button
-                                    onClick={() => deleteRating(r.ratingId)}
-                                    className="px-2 py-1 bg-gray-700 text-white rounded"
-                                >
-                                    Delete
-                                </button>
-                            </td>
+        <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                    <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                            <th className="px-4 py-3 font-medium">Rating ID</th>
+                            <th className="px-4 py-3 font-medium">Reporter</th>
+                            <th className="px-4 py-3 font-medium">Reason</th>
+                            <th className="px-4 py-3 font-medium">Actions</th>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {reports.length === 0 && (
+                            <tr>
+                                <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
+                                    No rating reports.
+                                </td>
+                            </tr>
+                        )}
+                        {reports.map((r) => (
+                            <tr key={r.id} className="hover:bg-slate-50">
+                                <td className="px-4 py-3 font-mono text-xs text-slate-600">{r.ratingId}</td>
+                                <td className="px-4 py-3 font-mono text-xs text-slate-600">{r.reporterUserId}</td>
+                                <td className="px-4 py-3 text-slate-700">{r.reason}</td>
+                                <td className="px-4 py-3">
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => banUser(r.reporterUserId)}
+                                            className="rounded-md bg-red-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-600"
+                                        >
+                                            Ban
+                                        </button>
+                                        <button
+                                            onClick={() => sendWarning(r.reporterUserId, r.reason)}
+                                            className="rounded-md bg-amber-400 px-2.5 py-1 text-xs font-medium text-amber-950 hover:bg-amber-500"
+                                        >
+                                            Warn
+                                        </button>
+                                        <button
+                                            onClick={() => deleteRating(r.ratingId)}
+                                            className="rounded-md bg-slate-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-800"
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }

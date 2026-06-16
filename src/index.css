@@ -1,3 +1,24 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-slate-100 text-slate-800;
+  }
+}
+
+@layer components {
+  .skeleton {
+    @apply animate-pulse rounded-md bg-slate-200;
+  }
+
+  .card {
+    @apply rounded-2xl bg-white shadow-card ring-1 ring-slate-900/5;
+  }
+}

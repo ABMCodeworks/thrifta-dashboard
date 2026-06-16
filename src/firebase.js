@@ -1,7 +1,12 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
-import { getAuth } from "firebase/auth";
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+} from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -16,3 +21,18 @@ const app = initializeApp(firebaseConfig);
 export const functions = getFunctions(app);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+/**
+ * Choose how long a session survives.
+ * - remember = true  → browserLocalPersistence (persists across browser restarts)
+ * - remember = false → browserSessionPersistence (cleared when the tab closes)
+ *
+ * Must be called before signInWithEmailAndPassword so the credential lands in the
+ * right store.
+ */
+export function applyPersistence(remember) {
+  return setPersistence(
+    auth,
+    remember ? browserLocalPersistence : browserSessionPersistence,
+  );
+}

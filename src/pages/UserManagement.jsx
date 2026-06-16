@@ -346,9 +346,7 @@ export default function UserManagement() {
   if (loading) return <p className="p-6">Loading users…</p>;
 
   return (
-    <div className="p-8 relative">
-      <h1 className="text-2xl font-semibold mb-4">User Management</h1>
-
+    <div className="relative">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <input
           value={search}

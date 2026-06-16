@@ -6,9 +6,7 @@ export default function CustomerSupport() {
     const [activeUser, setActiveUser] = useState(null);
 
     return (
-        <div className="flex h-[calc(100vh-64px)]">
-            {" "}
-            {/* full-screen minus navbar */}
+        <div className="flex h-full bg-white">
             <ChatSidebar onSelect={setActiveUser} activeUserId={activeUser} />
             <ChatWindow userId={activeUser} />
         </div>
