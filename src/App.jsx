@@ -3,7 +3,7 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import ProtectedRoute from "./components/ProtectedRoute";
-import RequireMfa from "./components/RequireMfa";
+import MfaGate from "./components/MfaGate";
 import AppLayout from "./components/layout/AppLayout";
 
 import Login from "./pages/Login.jsx";
@@ -28,7 +28,7 @@ function Protected({ title, children, mfa = true, fullBleed = false }) {
     </AppLayout>
   );
   return (
-    <ProtectedRoute>{mfa ? <RequireMfa>{shell}</RequireMfa> : shell}</ProtectedRoute>
+    <ProtectedRoute>{mfa ? <MfaGate>{shell}</MfaGate> : shell}</ProtectedRoute>
   );
 }
 

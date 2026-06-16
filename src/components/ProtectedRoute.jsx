@@ -10,7 +10,7 @@ import VerifyEmail from "../pages/VerifyEmail";
  *   unverified  → email verification screen (with resend)
  *   otherwise   → render children
  *
- * MFA enrollment is enforced separately by <RequireMfa> so that /security
+ * MFA enrollment is enforced separately by <MfaGate> so that /security
  * itself stays reachable for first-time enrollment.
  */
 export default function ProtectedRoute({ children }) {

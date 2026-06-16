@@ -14,19 +14,9 @@ const MESSAGES = {
     "Too many attempts. Please wait a few minutes and try again.",
   "auth/network-request-failed":
     "Network error. Check your connection and try again.",
-  "auth/invalid-verification-code":
-    "That code is incorrect or has expired. Try the latest code from your app.",
-  "auth/missing-verification-code": "Enter the 6-digit code from your authenticator app.",
-  "auth/totp-challenge-timeout": "The code expired. Please try again.",
   "auth/requires-recent-login":
     "For your security, please sign in again before changing security settings.",
-  "auth/maximum-second-factor-count-exceeded":
-    "You've reached the maximum number of authenticators.",
-  "auth/second-factor-already-in-use":
-    "That authenticator is already enrolled on this account.",
   "auth/unverified-email": "Please verify your email address before continuing.",
-  "auth/operation-not-allowed":
-    "Multi-factor auth isn't enabled for this project yet. Enable it in the Firebase console.",
 };
 
 export function friendlyAuthError(err) {

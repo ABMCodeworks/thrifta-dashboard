@@ -3,7 +3,6 @@ const API_KEY = import.meta.env.VITE_RAILWAY_API_KEY;
 
 /** Internal helper */
 async function postJson(path, payload) {
-  console.log(payload);
   const res = await fetch(`${SERVER_URL}${path}`, {
     method: "POST",
     headers: {
@@ -14,7 +13,7 @@ async function postJson(path, payload) {
   });
 
   if (!res.ok) {
-    console.error(`Server responded ${res.status}`, await res.text());
+    console.error(`Notification server responded ${res.status}`);
     return false;
   }
 
@@ -22,7 +21,6 @@ async function postJson(path, payload) {
   if (!data.success) {
     console.error("Notification server error:", data.error);
   }
-  console.log(data);
   return data.success === true;
 }
 
@@ -61,7 +59,6 @@ export async function sendNotificationToUser({
 
   const endpoint =
     type === "message" ? "/send-message-notification" : "/send-notification";
-  console.log(endpoint);
 
   return postJson(endpoint, payload);
 }
