@@ -87,12 +87,36 @@ export default function Security() {
       </div>
 
       {MFA_REQUIRED && !enabled && !secret && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          <Icon name="warning" className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-          <p>
-            Two-factor authentication is <strong>required</strong>. Set up an
-            authenticator app below to continue to the dashboard.
-          </p>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+          <div className="flex items-start gap-3">
+            <Icon
+              name="shield"
+              className="mt-0.5 h-5 w-5 shrink-0 text-amber-500"
+            />
+            <div className="min-w-0">
+              <h2 className="font-semibold text-amber-900">
+                Set up two-factor authentication to continue
+              </h2>
+              <p className="mt-1 text-sm text-amber-800">
+                It's <strong>required</strong> for all admins and takes about a
+                minute:
+              </p>
+              <ol className="mt-3 space-y-2 text-sm text-amber-900">
+                {[
+                  "Install an authenticator app on your phone (Google Authenticator, 1Password, Authy, etc.).",
+                  'Select "Set up authenticator app" below and scan the QR code — or type the key in manually.',
+                  "Enter the 6-digit code your app shows to activate it.",
+                ].map((step, i) => (
+                  <li key={i} className="flex items-start gap-2.5">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[11px] font-semibold text-white">
+                      {i + 1}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
         </div>
       )}
 

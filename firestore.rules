@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reference copy of the Firestore rules for the Thrifta project.
+// Manage/deploy these wherever your project's rules live (Firebase console or
+// your backend repo). Test in the Rules Playground before publishing — this
+// affects the live mobile app, not just the admin dashboard.
+//
+// Change vs. the previous rules: the single recursive `/{document=**}` wildcard
+// is split into collection-scoped wildcards so we can exclude `admin_mfa`.
+// Every other collection keeps EXACTLY the previous behavior
+// (public read + signed-in write), including collections not listed here, so
+// nothing in the app breaks. `admin_mfa` is the only path that changes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* helper: true if the request is from a signed-in user */
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    /* ──────────────────────────────────────────────────────────────────────
+       admin_mfa: each admin's TOTP secret. Only the owning admin may
+       read or write their own doc, so the secret is NOT world-readable and
+       no other signed-in user can overwrite/disable someone's MFA.
+       This block must come first AND the wildcards below must exclude
+       'admin_mfa' (Firestore rules are additive — a stricter block cannot
+       override a broader allow).
+       ────────────────────────────────────────────────────────────────────── */
+    match /admin_mfa/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    /* ──────────────────────────────────────────────────────────────────────
+       Everything else keeps the previous open posture, EXCEPT admin_mfa.
+       Two matches cover top-level docs and any nested subcollection docs.
+       Because `collection` is bound to the first path segment, the
+       `!= 'admin_mfa'` guard keeps the catch-all from re-opening the secret.
+       ────────────────────────────────────────────────────────────────────── */
+    match /{collection}/{docId} {
+      allow read:  if collection != 'admin_mfa';
+      allow write: if signedIn() && collection != 'admin_mfa';
+    }
+
+    match /{collection}/{docId}/{document=**} {
+      allow read:  if collection != 'admin_mfa';
+      allow write: if signedIn() && collection != 'admin_mfa';
+    }
+  }
+}

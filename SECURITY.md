@@ -50,10 +50,24 @@ tool but not a server-enforced control:
 
 ## Recommended hardening (when you're ready)
 
-1. **Lock down the secret** with a Firestore rule so only the owner can read it:
+1. **Lock down the secret** so only the owning admin can read/write it. See
+   [`firestore.rules`](firestore.rules) for the full ruleset.
+
+   ⚠️ A standalone `match /admin_mfa/{uid}` block does **nothing** if your rules
+   still contain a catch-all `match /{document=**} { allow read: if true }` —
+   Firestore rules are additive (OR), so the catch-all keeps the secret
+   world-readable. The catch-all must exclude `admin_mfa`:
    ```
    match /admin_mfa/{uid} {
      allow read, write: if request.auth != null && request.auth.uid == uid;
+   }
+   match /{collection}/{docId} {
+     allow read:  if collection != 'admin_mfa';
+     allow write: if request.auth != null && collection != 'admin_mfa';
+   }
+   match /{collection}/{docId}/{document=**} {
+     allow read:  if collection != 'admin_mfa';
+     allow write: if request.auth != null && collection != 'admin_mfa';
    }
    ```
 2. **Enforce the allow-list / admin role server-side** in Firestore security
