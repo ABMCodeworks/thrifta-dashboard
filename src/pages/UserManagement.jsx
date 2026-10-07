@@ -15,10 +15,14 @@ import {
   setDoc,
   serverTimestamp,
   increment,
-  writeBatch,
+  getDocFromServer,
+  getDocsFromServer,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { sendNotificationToUser } from "../utils/notifications";
+
+import { planUndraft, subscriptionProductLimit } from "../utils/productPublishingPolicy";
+import { undraftProducts } from "../utils/undraftProducts";
 
 const ADMIN_UID = "HFhMEeJg7GdNCl4atA2YJTlAKsF2";
 const ADMIN_ALIAS = "Admin";
@@ -246,42 +250,40 @@ export default function UserManagement() {
     const label = user.displayName || user.email || user.uid;
 
     try {
-      const snap = await getDocs(
+      const freshUser = await getDocFromServer(doc(db, "users", user.uid));
+      if (!freshUser.exists() || !subscriptionProductLimit(freshUser.data())) {
+        setProductActionResult({ error: true, text: "Only users with an active subscription can undraft products." });
+        return;
+      }
+      const snap = await getDocsFromServer(
         query(collection(db, "products"), where("sellerId", "==", user.uid)),
       );
-      const drafts = snap.docs.filter((product) => product.data().draft === true);
-
-      if (drafts.length === 0) {
+      const products = snap.docs.map(p => ({ ...p.data(), id: p.id }));
+      const plan = planUndraft(freshUser.data(), products);
+      const draftCount = plan.selected.length + plan.skipped;
+      if (draftCount === 0) {
         setProductActionResult({ text: `No draft products found for ${label}.` });
         return;
       }
-
+      if (plan.selected.length === 0) {
+        setProductActionResult({ error: true, text: `${label} has ${plan.active} active products and a subscription limit of ${plan.limit}. No listing slots remain; all products were left as drafts.` });
+        return;
+      }
       if (!window.confirm(
-        `Undraft all ${drafts.length} draft products for ${label} (${user.uid})? Their listing timestamps will be refreshed. Sold and hidden statuses will stay the same.`,
+        `Undraft ${plan.selected.length} of ${draftCount} draft products for ${label} (${user.uid})? Current active listings: ${plan.active}/${plan.limit}. ${plan.skipped} will stay as drafts due to the subscription limit. Listing timestamps will be refreshed; sold and hidden statuses will stay the same.`,
       )) return;
 
-      // Keep each commit below Firestore's batch write limit.
-      for (let offset = 0; offset < drafts.length; offset += 400) {
-        const chunk = drafts.slice(offset, offset + 400);
-        const batch = writeBatch(db);
-        for (const product of chunk) {
-          batch.update(product.ref, {
-            draft: false,
-            timestamp: serverTimestamp(),
-          });
-        }
-        await batch.commit();
-        updatedCount += chunk.length;
-      }
-
+      await undraftProducts(db, user.uid, plan.selected.map(p => p.id), count => {
+        updatedCount = count;
+      });
       setProductActionResult({
-        text: `Undrafted ${updatedCount} products for ${label}.`,
+        text: `Undrafted ${updatedCount} products for ${label}. ${draftCount - updatedCount} were not undrafted. Subscription limits were rechecked before each batch.`,
       });
     } catch (err) {
       console.error("Failed to undraft products", err);
       setProductActionResult({
         error: true,
-        text: `Could not undraft all products for ${label}. ${updatedCount} products were undrafted before the error. Please try again to finish the remaining drafts.`,
+        text: `Could not undraft all products for ${label}. ${updatedCount} products were undrafted before the error. Check the subscription and remaining allowance before trying again.`,
       });
     } finally {
       setUndraftingUid(null);
@@ -506,7 +508,8 @@ export default function UserManagement() {
                   </button>
                   <button
                     onClick={() => undraftAllProducts(u)}
-                    disabled={Boolean(undraftingUid || busyUid)}
+                    disabled={Boolean(undraftingUid || busyUid) || !subscriptionProductLimit(u)}
+                    title={subscriptionProductLimit(u) ? "Undraft products up to the subscription limit" : "Requires an active subscription"}
                     className="block w-full px-2 py-1 bg-emerald-600 text-white rounded text-xs disabled:opacity-60"
                   >
                     {undraftingUid === u.uid ? "Undrafting…" : "Undraft All Products"}
