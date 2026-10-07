@@ -270,7 +270,7 @@ export default function UserManagement() {
         return;
       }
       if (!window.confirm(
-        `Undraft ${plan.selected.length} of ${draftCount} draft products for ${label} (${user.uid})? Current active listings: ${plan.active}/${plan.limit}. ${plan.skipped} will stay as drafts due to the subscription limit. Listing timestamps will be refreshed; sold and hidden statuses will stay the same.`,
+        `Undraft ${plan.selected.length} of ${draftCount} draft products for ${label} (${user.uid})? Current active listings: ${plan.active}/${plan.limit}. ${plan.skipped} will stay as drafts due to the subscription limit. Original upload dates will be preserved; sold and hidden statuses will stay the same.`,
       )) return;
 
       await undraftProducts(db, user.uid, plan.selected.map(p => p.id), count => {

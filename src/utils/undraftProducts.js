@@ -1,4 +1,4 @@
-import { collection, doc, getDocsFromServer, query, runTransaction, serverTimestamp, where } from 'firebase/firestore';
+import { collection, doc, getDocsFromServer, query, runTransaction, where } from 'firebase/firestore';
 import { planUndraft } from './productPublishingPolicy';
 
 export async function undraftProducts(db, uid, candidateIds, onProgress) {
@@ -20,7 +20,8 @@ export async function undraftProducts(db, uid, candidateIds, onProgress) {
       if (!plan.limit) throw new Error('This user no longer has an active subscription.');
       const selected = plan.selected.slice(0, 400);
       for (const product of selected) {
-        transaction.update(product.ref, { draft: false, timestamp: serverTimestamp() });
+        // Preserve the original upload timestamp and the listing's feed position.
+        transaction.update(product.ref, { draft: false });
       }
       return selected.map(p => p.id);
     });
