@@ -15,6 +15,7 @@ import {
   setDoc,
   serverTimestamp,
   increment,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { sendNotificationToUser } from "../utils/notifications";
@@ -80,6 +81,8 @@ export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyUid, setBusyUid] = useState(null);
+  const [undraftingUid, setUndraftingUid] = useState(null);
+  const [productActionResult, setProductActionResult] = useState(null);
   const [search, setSearch] = useState("");
 
   const [planFilter, setPlanFilter] = useState("all");
@@ -104,7 +107,7 @@ export default function UserManagement() {
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "users"), (snap) => {
       const list = snap.docs.map((d) => {
-        const data = { uid: d.id, ...d.data() };
+        const data = { ...d.data(), uid: d.id };
         return { ...data, __plan: normalizePlan(data) };
       });
       setUsers(list);
@@ -233,8 +236,61 @@ export default function UserManagement() {
     });
   };
 
+  /* ───────── undraft a user's products ───────── */
+  const undraftAllProducts = async (user) => {
+    if (undraftingUid || busyUid) return;
+
+    setUndraftingUid(user.uid);
+    setProductActionResult(null);
+    let updatedCount = 0;
+    const label = user.displayName || user.email || user.uid;
+
+    try {
+      const snap = await getDocs(
+        query(collection(db, "products"), where("sellerId", "==", user.uid)),
+      );
+      const drafts = snap.docs.filter((product) => product.data().draft === true);
+
+      if (drafts.length === 0) {
+        setProductActionResult({ text: `No draft products found for ${label}.` });
+        return;
+      }
+
+      if (!window.confirm(
+        `Undraft all ${drafts.length} draft products for ${label} (${user.uid})? Their listing timestamps will be refreshed. Sold and hidden statuses will stay the same.`,
+      )) return;
+
+      // Keep each commit below Firestore's batch write limit.
+      for (let offset = 0; offset < drafts.length; offset += 400) {
+        const chunk = drafts.slice(offset, offset + 400);
+        const batch = writeBatch(db);
+        for (const product of chunk) {
+          batch.update(product.ref, {
+            draft: false,
+            timestamp: serverTimestamp(),
+          });
+        }
+        await batch.commit();
+        updatedCount += chunk.length;
+      }
+
+      setProductActionResult({
+        text: `Undrafted ${updatedCount} products for ${label}.`,
+      });
+    } catch (err) {
+      console.error("Failed to undraft products", err);
+      setProductActionResult({
+        error: true,
+        text: `Could not undraft all products for ${label}. ${updatedCount} products were undrafted before the error. Please try again to finish the remaining drafts.`,
+      });
+    } finally {
+      setUndraftingUid(null);
+    }
+  };
+
   /* ───────── delete user & related ───────── */
   const deleteUserCompletely = async (uid) => {
+    if (undraftingUid || busyUid) return;
     if (
       !window.confirm(
         "Permanently delete user, their products, favorites, chats & messages?",
@@ -378,6 +434,15 @@ export default function UserManagement() {
         </div>
       </div>
 
+      {productActionResult && (
+        <p
+          role={productActionResult.error ? "alert" : "status"}
+          className={`mb-4 text-sm ${productActionResult.error ? "text-red-600" : "text-green-700"}`}
+        >
+          {productActionResult.text}
+        </p>
+      )}
+
       <div className="overflow-x-auto">
         <table className="min-w-full border-collapse text-left">
           <thead>
@@ -440,8 +505,15 @@ export default function UserManagement() {
                     View Chats
                   </button>
                   <button
+                    onClick={() => undraftAllProducts(u)}
+                    disabled={Boolean(undraftingUid || busyUid)}
+                    className="block w-full px-2 py-1 bg-emerald-600 text-white rounded text-xs disabled:opacity-60"
+                  >
+                    {undraftingUid === u.uid ? "Undrafting…" : "Undraft All Products"}
+                  </button>
+                  <button
                     onClick={() => deleteUserCompletely(u.uid)}
-                    disabled={busyUid === u.uid}
+                    disabled={Boolean(busyUid || undraftingUid)}
                     className="block w-full px-2 py-1 bg-red-600 text-white rounded text-xs disabled:opacity-60"
                   >
                     {busyUid === u.uid ? "Deleting…" : "Delete User"}
